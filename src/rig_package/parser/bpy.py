@@ -524,7 +524,17 @@ def make_asset(
     # 2. if there is armature, process tails and make armature
     if len(bpy.data.armatures) > 0:
         armature = bpy.data.armatures[0]
-        armature_name = armature.name
+        # [FabricatorStudio eval patch 2026-07-13] Resolve the armature
+        # OBJECT, never the DATA-BLOCK name. `armature` here is a data
+        # block, and its name is later used as `bpy.data.objects[
+        # armature_name]` (see make_asset below) — but Blender makes no
+        # promise that an object and its data share a name. On a real
+        # character whose armature data was named 'reggie' while its
+        # object was not, that lookup died with KeyError deep inside the
+        # export. Ask the scene for the armature object instead of
+        # guessing its name.
+        _arm_obj = next((o for o in bpy.data.objects if o.type == 'ARMATURE'), None)
+        armature_name = _arm_obj.name if _arm_obj is not None else armature.name
         joint_names = [b.name for b in armature.bones]
     else:
         armature = None
