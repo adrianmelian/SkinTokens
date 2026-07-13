@@ -597,8 +597,18 @@ def make_asset(
         if root_tail is False:
             tails[root_id] = joints[root_id] + np.array([0., 0., length])
         bpy.ops.object.armature_add(enter_editmode=True)
-        armature = bpy.data.armatures.get('Armature')
-        armature_name = asset.armature_name if asset.armature_name is not None else 'Armature'
+        # [FabricatorStudio eval patch 2026-07-13] armature_add() creates an
+        # OBJECT called 'Armature', but armature_name was then taken from the
+        # SOURCE asset — and `bpy.data.objects[armature_name]` below looks the
+        # object up by that name. So any rig not literally named 'Armature'
+        # died here with a KeyError (hit live on a real character named
+        # 'reggie'). Take the object bpy actually made, name it, and trust the
+        # name it ends up with (Blender may suffix on collision).
+        _arm_obj = bpy.context.object
+        armature = _arm_obj.data
+        _want = asset.armature_name if asset.armature_name is not None else 'Armature'
+        _arm_obj.name = _want
+        armature_name = _arm_obj.name
         
         edit_bones = armature.edit_bones
         
