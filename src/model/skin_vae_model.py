@@ -18,10 +18,26 @@ from .skin_vae.autoencoders import SkinFSQCVAEModel
 try:
     from flash_attn_interface import flash_attn_func # type: ignore
 except Exception as e:
-    from flash_attn.flash_attn_interface import flash_attn_func as _flash_attn_func
-    def flash_attn_func(*args, **kwargs):
-        res = _flash_attn_func(*args, **kwargs)
-        return res, None
+    try:
+        from flash_attn.flash_attn_interface import flash_attn_func as _flash_attn_func
+        def flash_attn_func(*args, **kwargs):
+            res = _flash_attn_func(*args, **kwargs)
+            return res, None
+    except Exception as e2:
+        # [FabricatorStudio eval patch 2026-07-12] No flash-attn installed: fall back to
+        # PyTorch SDPA. Mirrors the authors' own fallback in skin_vae/attention_processor.py.
+        # q,k,v arrive as (B, L, H, D); SDPA wants (B, H, L, D). Handles GQA (H_q != H_kv).
+        import torch.nn.functional as _F
+        def flash_attn_func(q, k, v, *args, **kwargs):
+            q = q.permute(0, 2, 1, 3)
+            k = k.permute(0, 2, 1, 3)
+            v = v.permute(0, 2, 1, 3)
+            if q.shape[1] != k.shape[1]:
+                r = q.shape[1] // k.shape[1]
+                k = k.repeat_interleave(r, dim=1)
+                v = v.repeat_interleave(r, dim=1)
+            out = _F.scaled_dot_product_attention(q, k, v)
+            return out.permute(0, 2, 1, 3), None
 
 class Perceiver(nn.Module):
     def __init__(self, channels, out_tokens, num_heads=8):

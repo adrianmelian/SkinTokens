@@ -76,7 +76,7 @@ def get_model(
         a = AutoModel.from_pretrained(
             hf_path,
             local_files_only=True,
-            _attn_implementation="flash_attention_2",
+            _attn_implementation="sdpa",  # [FabricatorStudio eval patch 2026-07-12] flash_attention_2 -> sdpa
             torch_dtype=torch.bfloat16,
         )
         model.transformer.model.load_state_dict(a.state_dict())
