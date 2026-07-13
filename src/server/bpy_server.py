@@ -61,7 +61,23 @@ def run():
         response.content_type = 'application/octet-stream'  # type: ignore
         return payload
     
-    def run_server(): bottle.run(app, host='0.0.0.0', port=BPY_PORT, server='tornado')
+    # [FabricatorStudio patch 2026-07-13] host 0.0.0.0 -> 127.0.0.1.
+    #
+    # This endpoint is an UNAUTHENTICATED REMOTE CODE EXECUTION when bound to
+    # 0.0.0.0. Its request bodies are deserialised with bytes_to_object(), which
+    # is torch.load(..., weights_only=False) — i.e. pickle, which executes
+    # arbitrary code while unpickling. There is no auth, no token, and no origin
+    # check. Bound to all interfaces, any host that can reach port 59876 while a
+    # rig job is running can POST a crafted payload and run code as the user.
+    #
+    # Loopback costs nothing: the client already talks to
+    # http://localhost:59876 (BPY_SERVER, src/server/spec.py), so it was never
+    # reaching this server from off-box in the first place. 0.0.0.0 bought
+    # exposure and no capability.
+    #
+    # Upstream is a research demo, where this is unremarkable. AutoSkin ships it
+    # to artists' workstations, where it is not.
+    def run_server(): bottle.run(app, host='127.0.0.1', port=BPY_PORT, server='tornado')
     threading.Thread(target=run_server, daemon=False).start()
     
     while True:
